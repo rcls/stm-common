@@ -7,12 +7,7 @@
 use crate::cpu::{WFE, barrier};
 use crate::vcell::{UCell, VCell};
 
-use super::{DEBUG, NODEBUG, UART, UART_ISR, lazy_init};
-
-use core::fmt::Write;
-
-
-pub struct DebugMarker;
+use super::{DEBUG, ENABLE, INTERRUPT, UART, lazy_init};
 
 pub struct Debug {
     pub w: VCell<u8>,
@@ -21,7 +16,7 @@ pub struct Debug {
 }
 
 pub fn debug_isr() {
-    if !NODEBUG {
+    if ENABLE {
         DEBUG.isr();
     }
 }
@@ -37,7 +32,7 @@ impl const Default for Debug {
 
 impl Debug {
     pub fn write_bytes(&self, s: &[u8]) {
-        if NODEBUG {
+        if !ENABLE {
             return;
         }
         lazy_init();
@@ -59,14 +54,15 @@ impl Debug {
         // twice in case there is a race condition where we read pending on an
         // enabled interrupt.
         let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-        let bit: u32 = 1 << UART_ISR as u32;
-        if nvic.icpr[0].read() & bit == 0 {
+        let bit: usize = INTERRUPT as usize % 32;
+        let idx: usize = INTERRUPT as usize / 32;
+        if nvic.icpr[idx].read() & 1 << bit == 0 {
             return;
         }
         // It might take a couple of goes for the pending state to clear, so
         // loop.
-        while nvic.icpr[0].read() & bit != 0 {
-            unsafe {nvic.icpr[0].write(bit)};
+        while nvic.icpr[idx].read() & 1 << bit != 0 {
+            unsafe {nvic.icpr[idx].write(1 << bit)};
             debug_isr();
         }
     }
@@ -130,7 +126,7 @@ pub fn write_str(s: &str) {
     DEBUG.write_bytes(s.as_bytes());
 }
 
-impl Write for DebugMarker {
+impl core::fmt::Write for super::DebugMarker {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         write_str(s);
         Ok(())
@@ -145,21 +141,21 @@ impl Write for DebugMarker {
 #[macro_export]
 macro_rules! dbg {
     ($($tt:tt)*) => {
-        if !$crate::debug::NODEBUG {
+        if $crate::debug::ENABLE {
             let _ = core::fmt::Write::write_fmt(
-                &mut $crate::debug::debug_core::DebugMarker, format_args!($($tt)*));
+                &mut $crate::debug::debug_marker(), format_args!($($tt)*));
         }
     }
 }
 
 #[macro_export]
 macro_rules! dbgln {
-    () => {if !$crate::debug::NODEBUG {
+    () => {if $crate::debug::ENABLE {
         let _ = core::fmt::Write::write_str(
-            &mut $crate::debug::debug_core::DebugMarker, "\n");
+            &mut $crate::debug::debug_marker(), "\n");
         }};
-    ($($tt:tt)*) => {if !$crate::debug::NODEBUG {
+    ($($tt:tt)*) => {if $crate::debug::ENABLE {
         let _ = core::fmt::Write::write_fmt(
-            &mut $crate::debug::debug_core::DebugMarker, format_args_nl!($($tt)*));
+            &mut $crate::debug::debug_marker(), format_args_nl!($($tt)*));
         }};
 }

@@ -54,5 +54,4 @@ macro_rules! VCellImpl {
     )*};
 }
 
-// VCellImpl!(bool, i8, u8, i16, u16, i32, u32, isize, usize, char);
-VCellImpl!(u8);
+VCellImpl!(bool, i8, u8, i16, u16, i32, u32, isize, usize, char);

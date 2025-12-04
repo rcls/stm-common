@@ -3,9 +3,8 @@ use core::marker::PhantomData;
 use crate::cpu::barrier;
 use crate::dma::{DMA_Channel, Flat};
 use crate::vcell::{UCell, VCell};
-use crate::dbgln;
 
-use super::{I2C, rx_channel, tx_channel, RX_MUXIN, TX_MUXIN};
+use super::{I2C, RX_MUXIN, TX_MUXIN, rx_channel, tx_channel};
 
 pub type Result = core::result::Result<(), ()>;
 
@@ -22,13 +21,16 @@ pub struct I2cContext {
 /// We would much rather just have a PhantomData of the correct reference type,
 /// but then Wait would be different depending on the data in flight!
 #[must_use]
-pub struct Wait<'a>(PhantomData<&'a [u8]>, PhantomData<&'a mut [u8]>);
+#[derive(Default)]
+pub struct Wait<'a>(PhantomData<(&'a [u8], &'a mut [u8])>);
 
 pub static CONTEXT: UCell<I2cContext> = UCell::default();
 
 pub const F_I2C: u8 = 1;
 pub const F_DMA_RX: u8 = 2;
 pub const F_DMA_TX: u8 = 4;
+
+macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
 pub fn i2c_isr() {
     let i2c = unsafe {&*I2C::ptr()};
@@ -161,14 +163,11 @@ impl I2cContext {
             |w|w.TXDMAEN().set_bit().RXDMAEN().set_bit().PE().set_bit()
                 .NACKIE().set_bit().ERRIE().set_bit().TCIE().set_bit()
                 .STOPIE().set_bit());
+        barrier();
     }
 }
 
 impl<'a> Wait<'a> {
-    pub fn default() -> Self {
-        barrier();
-        Wait(PhantomData, PhantomData)
-    }
     pub fn new<T: ?Sized>(_ : &'a T) -> Self {Self::default()}
     pub fn defer(self) {core::mem::forget(self);}
     pub fn wait(self) -> Result {

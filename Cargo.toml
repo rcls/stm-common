@@ -7,9 +7,11 @@ edition = '2024'
 
 [features]
 cpu_stm32h503 = ['dep:stm32h503']
+cpu_stm32u031 = ['dep:stm32u031']
 
 [dependencies]
-stm32h503 = {path = '../stm32h503', optional = true}
+stm32h503 = {git = 'https://github.com/rcls/pac-stm32h503.git', optional = true}
+stm32u031 = {git = 'https://github.com/rcls/pac-stm32u031.git', optional = true}
 konst = '*'
 
 [target.'cfg(not(target_arch = "arm"))'.dependencies]

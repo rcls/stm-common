@@ -1,8 +1,8 @@
 use core::marker::PhantomData;
+use stm_common::vcell::{UCell, VCell};
 
 use crate::cpu::barrier;
 use crate::dma::{DMA_Channel, Flat};
-use crate::vcell::{UCell, VCell};
 
 use super::{I2C, RX_MUXIN, TX_MUXIN, rx_channel, tx_channel};
 

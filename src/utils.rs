@@ -1,3 +1,9 @@
+
+#[inline(always)]
+pub fn barrier() {
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+}
+
 /// Calling this function will cause a linker error when building the firmware,
 /// unless the compiler optimises it away completely.
 ///

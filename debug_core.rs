@@ -5,7 +5,7 @@
 //! We assume that the crate we are part of contains a few things...
 
 use crate::cpu::{WFE, barrier};
-use crate::vcell::{UCell, VCell};
+use stm_common::vcell::{UCell, VCell};
 
 use super::{DEBUG, ENABLE, INTERRUPT, UART, lazy_init};
 

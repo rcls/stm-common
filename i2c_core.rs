@@ -1,7 +1,8 @@
 use core::marker::PhantomData;
-use stm_common::vcell::{UCell, VCell};
 
-use crate::cpu::barrier;
+use stm_common::vcell::{UCell, VCell};
+use stm_common::utils::{WFE, barrier};
+
 use crate::dma::{DMA_Channel, Flat};
 
 use super::{I2C, RX_MUXIN, TX_MUXIN, rx_channel, tx_channel};
@@ -143,7 +144,7 @@ impl I2cContext {
     fn done(&self) -> bool {self.outstanding.read() == 0}
     fn wait(&self) {
         while !self.done() {
-            crate::cpu::WFE();
+            WFE();
         }
         barrier();
         if self.error.read() != 0 {

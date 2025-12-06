@@ -4,7 +4,7 @@
 //!
 //! We assume that the crate we are part of contains a few things...
 
-use crate::cpu::{WFE, barrier};
+use stm_common::utils::{WFE, barrier};
 
 use core::marker::PhantomData;
 use stm_common::vcell::{UCell, VCell};
@@ -25,8 +25,7 @@ pub struct Debug<M> {
 
 #[derive(Default)]
 pub struct DebugMarker<D, M> {
-    #[allow(unused)]
-    data: D,
+    _data: D,
     meta: PhantomData<M>,
 }
 

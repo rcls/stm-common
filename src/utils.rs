@@ -4,6 +4,18 @@ pub fn barrier() {
     core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
 }
 
+#[inline(always)]
+#[allow(non_snake_case)]
+pub fn WFE() {
+    if cfg!(target_arch = "arm") {
+        unsafe {
+            core::arch::asm!("wfe", options(nomem, preserves_flags, nostack))};
+    }
+    else {
+        panic!("wfe!");
+    }
+}
+
 /// Calling this function will cause a linker error when building the firmware,
 /// unless the compiler optimises it away completely.
 ///

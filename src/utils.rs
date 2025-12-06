@@ -16,6 +16,11 @@ pub fn WFE() {
     }
 }
 
+#[inline(always)]
+pub fn nothing() {
+    unsafe {core::arch::asm!("", options(nomem, nostack, preserves_flags))}
+}
+
 pub fn reboot() -> ! {
     loop {
         unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};

@@ -33,6 +33,14 @@ pub struct VectorTable<T> {
 /// !@#$!@$#
 unsafe impl<T> Sync for VectorTable<T> {}
 
+impl<T> VectorTable<T> {
+    pub const fn isr(&mut self,
+                     n: crate::stm32::Interrupt, handler: fn()) -> &mut Self {
+        self.isr[n as usize] = handler;
+        self
+    }
+}
+
 impl<T: Meta> const Default for VectorTable<T> {
     fn default() -> Self {
         VectorTable{

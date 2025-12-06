@@ -1,6 +1,7 @@
 #![no_std]
 #![allow(incomplete_features)]
 #![deny(warnings)]
+#![feature(associated_type_defaults)]
 #![feature(const_default)]
 #![feature(const_trait_impl)]
 #![feature(derive_const)]
@@ -12,6 +13,8 @@ pub mod dma;
 pub mod debug;
 pub mod i2c;
 pub mod interrupt;
+#[cfg(feature = "cpu_stm32h503")]
+pub mod usb;
 pub mod utils;
 pub mod vcell;
 

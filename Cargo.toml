@@ -6,6 +6,7 @@ version = '0.1.0'
 edition = '2024'
 
 [features]
+debug_lpuart = []
 cpu_stm32h503 = ['dep:stm32h503']
 cpu_stm32u031 = ['dep:stm32u031']
 

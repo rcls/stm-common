@@ -31,7 +31,7 @@ pub const F_I2C: u8 = 1;
 pub const F_DMA_RX: u8 = 2;
 pub const F_DMA_TX: u8 = 4;
 
-macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+macro_rules!dbgln {($($tt:tt)*) => {if false {stm_common::dbgln!($($tt)*)}};}
 
 pub fn i2c_isr() {
     let i2c = unsafe {&*I2C::ptr()};

@@ -9,13 +9,17 @@ use crate::vcell::{UCell, VCell};
 
 use core::marker::PhantomData;
 
-#[cfg(feature = "cpu_stm32h503")]
-type UART = stm32h503::USART3;
+#[cfg(not(feature = "debug_lpuart"))]
+pub type UART = crate::stm32::usart1::RegisterBlock;
 
-pub trait DebugMeta: Sized + 'static {
+#[cfg(feature = "debug_lpuart")]
+pub type UART = crate::stm32::lpuart1::RegisterBlock;
+
+pub trait Meta: Sized + 'static {
     const ENABLE: bool = true;
     const INTERRUPT: u32;
-    fn get_debug() -> &'static Debug<Self>;
+    fn debug() -> &'static Debug<Self>;
+    fn uart() -> &'static UART;
     fn lazy_init();
     fn is_init() -> bool;
 }
@@ -28,7 +32,7 @@ pub struct Debug<M> {
 }
 
 #[derive(Default)]
-pub struct DebugMarker<D, M> {
+pub struct Marker<D, M> {
     _data: D,
     meta: PhantomData<M>,
 }
@@ -43,7 +47,7 @@ impl<M> const Default for Debug<M> {
     }
 }
 
-impl<M: DebugMeta> Debug<M> {
+impl<M: Meta> Debug<M> {
     pub fn write_bytes(&self, s: &[u8]) {
         if !M::ENABLE {
             return;
@@ -61,6 +65,7 @@ impl<M: DebugMeta> Debug<M> {
         }
         self.enable(w);
     }
+
     fn push(&self) {
         WFE();
         // If the interrupt is pending, call the ISR ourselves.  Read the bit
@@ -79,22 +84,24 @@ impl<M: DebugMeta> Debug<M> {
             self.isr();
         }
     }
+
     fn enable(&self, w: u8) {
         barrier();
         self.w.write(w);
 
-        let uart = unsafe {&*UART::ptr()};
+        let uart = M::uart();
         // Use the FIFO empty interrupt.  Normally we should be fast enough
         // to refill before the last byte finishes.
         uart.CR1.write(
             |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit()
                 . TXFEIE().set_bit());
     }
+
     pub fn isr(&self) {
         if !M::ENABLE {
             return;
         }
-        let uart = unsafe {&*UART::ptr()};
+        let uart = M::uart();
         let sr = uart.ISR.read();
         if sr.TC().bit() {
             uart.CR1.modify(|_,w| w.TCIE().clear_bit());
@@ -119,13 +126,13 @@ impl<M: DebugMeta> Debug<M> {
     }
 }
 
-pub fn flush<M: DebugMeta>() {
+pub fn flush<M: Meta>() {
     if !M::ENABLE || !M::is_init() {
         return;                        // Not initialized, nothing to do.
     }
 
-    let uart = unsafe {&*UART::ptr()};
-    let debug = M::get_debug();
+    let uart = M::uart();
+    let debug = M::debug();
     // Enable the TC interrupt.
     uart.CR1.modify(|_,w| w.TCIE().set_bit());
     // Wait for the TC bit.
@@ -140,13 +147,13 @@ pub fn flush<M: DebugMeta>() {
 }
 
 #[inline]
-pub fn write_str<M: DebugMeta> (s: &str) {
+pub fn write_str<M: Meta> (s: &str) {
     if M::ENABLE {
-        M::get_debug().write_bytes(s.as_bytes());
+        M::debug().write_bytes(s.as_bytes());
     }
 }
 
-impl<T, M: DebugMeta> core::fmt::Write for DebugMarker<T, M> {
+impl<T, M: Meta> core::fmt::Write for Marker<T, M> {
     #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         write_str::<M>(s);
@@ -155,7 +162,7 @@ impl<T, M: DebugMeta> core::fmt::Write for DebugMarker<T, M> {
     #[inline]
     fn write_char(&mut self, c: char) -> core::fmt::Result {
         let cc = [c as u8];
-        M::get_debug().write_bytes(&cc);
+        M::debug().write_bytes(&cc);
         Ok(())
     }
 }

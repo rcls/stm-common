@@ -5,8 +5,11 @@ name = 'stm_common'
 version = '0.1.0'
 edition = '2024'
 
+[features]
+cpu_stm32h503 = ['dep:stm32h503']
+
 [dependencies]
-stm32h503 = { path = '../stm32h503' }
+stm32h503 = {path = '../stm32h503', optional = true}
 konst = '*'
 
 [target.'cfg(not(target_arch = "arm"))'.dependencies]

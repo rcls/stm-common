@@ -45,7 +45,7 @@ impl<T: Meta> const Default for VectorTable<T> {
             reserved2 : [0; 2],
             pendsv    : T::bugger,
             systick   : T::bugger,
-            isr       : [T::bugger; 32],
+            isr       : [T::bugger; NUM_INTERRUPTS],
             phantom   : PhantomData
         }
     }

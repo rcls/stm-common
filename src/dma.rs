@@ -26,13 +26,10 @@ pub trait DMA_Channel {
 }
 
 #[cfg(feature = "cpu_stm32h503")]
-pub type Channel = stm32h503::gpdma1::c::C;
+pub type Channel = stm32::gpdma1::c::C;
 
-#[cfg(feature = "cpu_stm32g030")]
+#[cfg(any(feature = "cpu_stm32g030", feature = "cpu_stm32u031"))]
 pub type Channel = stm32::dma1::ch::CH;
-
-#[cfg(feature = "cpu_stm32u031")]
-pub type Channel = stm32u031::dma1::ch::CH;
 
 #[cfg(feature = "cpu_stm32h503")]
 impl DMA_Channel for Channel {

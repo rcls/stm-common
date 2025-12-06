@@ -5,34 +5,44 @@
 //! We assume that the crate we are part of contains a few things...
 
 use crate::cpu::{WFE, barrier};
+
+use core::marker::PhantomData;
 use stm_common::vcell::{UCell, VCell};
 
-use super::{DEBUG, ENABLE, INTERRUPT, UART, lazy_init};
+use super::{DEBUG, INTERRUPT, UART, lazy_init};
 
-pub struct Debug {
+pub trait DebugMeta: Sized + 'static {
+    const ENABLE: bool = true;
+    fn get_debug() -> &'static Debug<Self>;
+}
+
+pub struct Debug<M> {
     pub w: VCell<u8>,
     pub r: VCell<u8>,
     buf: [UCell<u8>; 256],
+    phantom: PhantomData<M>,
 }
 
-pub fn debug_isr() {
-    if ENABLE {
-        DEBUG.isr();
-    }
+#[derive(Default)]
+pub struct DebugMarker<D, M> {
+    #[allow(unused)]
+    data: D,
+    meta: PhantomData<M>,
 }
 
-impl const Default for Debug {
-    fn default() -> Debug {
+impl<M> const Default for Debug<M> {
+    fn default() -> Debug<M> {
         Debug {
             w: VCell::new(0), r: VCell::new(0),
-            buf: [const {UCell::new(0)}; 256]
+            buf: [const {UCell::new(0)}; 256],
+            phantom: PhantomData,
         }
     }
 }
 
-impl Debug {
+impl<M: DebugMeta> Debug<M> {
     pub fn write_bytes(&self, s: &[u8]) {
-        if !ENABLE {
+        if !M::ENABLE {
             return;
         }
         lazy_init();
@@ -63,7 +73,7 @@ impl Debug {
         // loop.
         while nvic.icpr[idx].read() & 1 << bit != 0 {
             unsafe {nvic.icpr[idx].write(1 << bit)};
-            debug_isr();
+            DEBUG.isr();
         }
     }
     fn enable(&self, w: u8) {
@@ -77,7 +87,10 @@ impl Debug {
             |w| w.FIFOEN().set_bit().TE().set_bit().UE().set_bit()
                 . TXFEIE().set_bit());
     }
-    fn isr(&self) {
+    pub fn isr(&self) {
+        if !M::ENABLE {
+            return;
+        }
         let uart = unsafe {&*UART::ptr()};
         let sr = uart.ISR.read();
         if sr.TC().bit() {
@@ -103,42 +116,43 @@ impl Debug {
     }
 }
 
-pub fn flush() {
-    if !ENABLE || !super::is_init() {
+pub fn flush<M: DebugMeta>() {
+    if !M::ENABLE || !super::is_init() {
         return;                        // Not initialized, nothing to do.
     }
 
     let uart = unsafe {&*UART::ptr()};
+    let debug = M::get_debug();
     // Enable the TC interrupt.
     uart.CR1.modify(|_,w| w.TCIE().set_bit());
     // Wait for the TC bit.
     loop {
         let isr = uart.ISR.read();
-        if DEBUG.r.read() == DEBUG.w.read()
+        if debug.r.read() == DEBUG.w.read()
             && isr.TC().bit() && isr.TXFE().bit() {
             break;
         }
-        DEBUG.push();
+        debug.push();
     }
 }
 
 #[inline]
-pub fn write_str(s: &str) {
-    if ENABLE {
-        DEBUG.write_bytes(s.as_bytes());
+pub fn write_str<M: DebugMeta> (s: &str) {
+    if M::ENABLE {
+        M::get_debug().write_bytes(s.as_bytes());
     }
 }
 
-impl core::fmt::Write for super::DebugMarker {
+impl<T, M: DebugMeta> core::fmt::Write for DebugMarker<T, M> {
     #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        write_str(s);
+        write_str::<M>(s);
         Ok(())
     }
     #[inline]
     fn write_char(&mut self, c: char) -> core::fmt::Result {
         let cc = [c as u8];
-        DEBUG.write_bytes(&cc);
+        M::get_debug().write_bytes(&cc);
         Ok(())
     }
 }
@@ -146,21 +160,21 @@ impl core::fmt::Write for super::DebugMarker {
 #[macro_export]
 macro_rules! dbg {
     ($($tt:tt)*) => {
-        if $crate::debug::ENABLE {
+        if crate::debug::ENABLE {
             let _ = core::fmt::Write::write_fmt(
-                &mut $crate::debug::debug_marker(), format_args!($($tt)*));
+                &mut crate::debug::debug_marker(), format_args!($($tt)*));
         }
     }
 }
 
 #[macro_export]
 macro_rules! dbgln {
-    () => {if $crate::debug::ENABLE {
+    () => {if crate::debug::ENABLE {
         let _ = core::fmt::Write::write_str(
-            &mut $crate::debug::debug_marker(), "\n");
+            &mut crate::debug::debug_marker(), "\n");
         }};
     ($($tt:tt)*) => {if $crate::debug::ENABLE {
         let _ = core::fmt::Write::write_fmt(
-            &mut $crate::debug::debug_marker(), format_args_nl!($($tt)*));
+            &mut crate::debug::debug_marker(), format_args_nl!($($tt)*));
         }};
 }

@@ -72,6 +72,7 @@ pub struct DataEndPoints<UT: USBTypes> {
 pub struct USB_State<UT: USBTypes> {
     pub ep0: ControlState<UT>,
     pub eps: DataEndPoints<UT>,
+    pub app: UT,
 }
 
 impl<UT: USBTypes> const Default for DataEndPoints<UT> {
@@ -86,10 +87,11 @@ impl<UT: USBTypes> const Default for DataEndPoints<UT> {
     }}
 }
 
-impl<UT: USBTypes> const Default for USB_State<UT> {
+impl<UT: USBTypes + const Default> const Default for USB_State<UT> {
     fn default() -> Self {Self{
         ep0: ControlState::default(),
         eps: Default::default(),
+        app: UT::default(),
     }}
 }
 

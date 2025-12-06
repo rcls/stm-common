@@ -6,8 +6,7 @@ use core::cell::UnsafeCell;
 #[repr(transparent)]
 pub struct VCell<T>(UnsafeCell<T>);
 
-/// A basic cell for storage.  Shared access is safe, mutable access is
-/// unsafe.
+/// A basic cell for storage.  Shared access is safe, mutable access is unsafe.
 #[repr(transparent)]
 #[derive_const(Default)]
 pub struct UCell<T>(UnsafeCell<T>);
@@ -31,6 +30,9 @@ impl<T: Sync> UCell<T> {
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
     /// Get mutable access.  SAFETY:  It is up to the caller to ensure that
     /// mutability is handled correctly.
+    /// 
+    /// This means that the caller needs to take into account all users of
+    /// `as_ref()`.
     pub unsafe fn as_mut(&self) -> &mut T {unsafe{&mut *self.0.get()}}
 }
 

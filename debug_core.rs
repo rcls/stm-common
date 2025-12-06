@@ -104,7 +104,7 @@ impl Debug {
 }
 
 pub fn flush() {
-    if !super::is_init() {
+    if !ENABLE || !super::is_init() {
         return;                        // Not initialized, nothing to do.
     }
 
@@ -122,15 +122,20 @@ pub fn flush() {
     }
 }
 
+#[inline]
 pub fn write_str(s: &str) {
-    DEBUG.write_bytes(s.as_bytes());
+    if ENABLE {
+        DEBUG.write_bytes(s.as_bytes());
+    }
 }
 
 impl core::fmt::Write for super::DebugMarker {
+    #[inline]
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         write_str(s);
         Ok(())
     }
+    #[inline]
     fn write_char(&mut self, c: char) -> core::fmt::Result {
         let cc = [c as u8];
         DEBUG.write_bytes(&cc);

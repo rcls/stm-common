@@ -1,0 +1,27 @@
+cargo-features = ['different-binary-name']
+
+[package]
+name = 'stm_common'
+version = '0.1.0'
+edition = '2024'
+
+[dependencies]
+stm32h503 = { path = '../stm32h503' }
+konst = '*'
+
+[target.'cfg(not(target_arch = "arm"))'.dependencies]
+cortex-m = '*'
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = {version = '*', features = ['inline-asm']}
+
+[profile.dev]
+panic = 'abort'
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 's'
+debug = true
+panic = 'abort'
+strip = false

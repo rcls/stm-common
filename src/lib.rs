@@ -10,6 +10,7 @@
 pub mod dma;
 #[macro_use]
 pub mod debug;
+pub mod i2c;
 pub mod interrupt;
 pub mod utils;
 pub mod vcell;
@@ -41,9 +42,6 @@ fn debug_fmt(fmt: Arguments) {
 pub unsafe fn set_global_debug(f: Option<fn(Arguments)>) {
     if DEBUG_ENABLE {
         *unsafe {GLOBAL_DEBUG.as_mut()} = f;
-    }
-    if false {
-        crate::dbgln!("Hello, world!");
     }
 }
 

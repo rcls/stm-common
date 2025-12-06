@@ -35,11 +35,13 @@ impl DMA_Channel for Channel {
     fn write(&self, data: usize, len: usize, _size: u8) {
         self.SAR().write(|w| w.SA().bits(data as u32));
         self.BR1.write(|w| w.BNDT().bits(len as u16));
+        barrier();
         self.CR.write(|w| w.EN().set_bit().TCIE().set_bit());
     }
     fn read(&self, data: usize, len: usize, _size: u8) {
         self.DAR().write(|w| w.DA().bits(data as u32));
         self.BR1.write(|w| w.BNDT().bits(len as u16));
+        barrier();
         self.CR.write(|w| w.EN().set_bit().TCIE().set_bit());
     }
     fn writes_to(&self, dst: *mut u8, request: u8) {
@@ -65,6 +67,7 @@ impl DMA_Channel for Channel {
     }
 }
 
+#[cfg(feature = "cpu_stm32u031")]
 impl DMA_Channel for Channel {
     fn write(&self, data: usize, len: usize, size: u8) {
         setup(self, data, len, size, true)}
@@ -93,6 +96,7 @@ impl DMA_Channel for Channel {
     }
 }
 
+#[cfg(feature = "cpu_stm32u031")]
 fn setup(ch: &Channel, data: usize, len: usize, size: u8, write: bool) {
     ch.MAR .write(|w| w.bits(data as u32));
     ch.NDTR.write(|w| w.bits(len as u32));

@@ -7,6 +7,7 @@
 use crate::utils::{WFE, barrier};
 use crate::vcell::{UCell, VCell};
 
+use core::fmt::{Arguments, Result};
 use core::marker::PhantomData;
 
 #[cfg(not(feature = "debug_lpuart"))]
@@ -32,8 +33,7 @@ pub struct Debug<M> {
 }
 
 #[derive(Default)]
-pub struct Marker<D, M> {
-    _data: D,
+pub struct Marker<M> {
     meta: PhantomData<M>,
 }
 
@@ -153,14 +153,21 @@ pub fn write_str<M: Meta> (s: &str) {
     }
 }
 
-impl<T, M: Meta> core::fmt::Write for Marker<T, M> {
+#[inline]
+pub fn debug_fmt<M: Meta + Default> (fmt: Arguments<'_>) {
+    if M::ENABLE {
+        let _ = core::fmt::write(&mut Marker::<M>::default(), fmt);
+    }
+}
+
+impl<M: Meta> core::fmt::Write for Marker<M> {
     #[inline]
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+    fn write_str(&mut self, s: &str) -> Result {
         write_str::<M>(s);
         Ok(())
     }
     #[inline]
-    fn write_char(&mut self, c: char) -> core::fmt::Result {
+    fn write_char(&mut self, c: char) -> Result {
         let cc = [c as u8];
         M::debug().write_bytes(&cc);
         Ok(())
@@ -169,22 +176,14 @@ impl<T, M: Meta> core::fmt::Write for Marker<T, M> {
 
 #[macro_export]
 macro_rules! dbg {
-    ($($tt:tt)*) => {
-        if crate::debug::ENABLE {
-            let _ = core::fmt::Write::write_fmt(
-                &mut crate::debug::debug_marker(), format_args!($($tt)*));
-        }
-    }
+    ($($tt:tt)*) => {if crate::DEBUG_ENABLE {
+        crate::debug_fmt(format_args!($($tt)*));}}
 }
 
 #[macro_export]
 macro_rules! dbgln {
-    () => {if crate::debug::ENABLE {
-        let _ = core::fmt::Write::write_str(
-            &mut crate::debug::debug_marker(), "\n");
-        }};
-    ($($tt:tt)*) => {if crate::debug::ENABLE {
-        let _ = core::fmt::Write::write_fmt(
-            &mut crate::debug::debug_marker(), format_args_nl!($($tt)*));
-        }};
+    () => {if crate::DEBUG_ENABLE {
+        crate::debug_fmt(format_args_nl!(""));}};
+    ($($tt:tt)*) => {if crate::DEBUG_ENABLE {
+        crate::debug_fmt(format_args_nl!($($tt)*));}};
 }

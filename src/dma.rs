@@ -1,4 +1,5 @@
 use crate::utils::barrier;
+use crate::stm32;
 
 #[allow(non_camel_case_types)]
 pub trait DMA_Channel {
@@ -26,6 +27,9 @@ pub trait DMA_Channel {
 
 #[cfg(feature = "cpu_stm32h503")]
 pub type Channel = stm32h503::gpdma1::c::C;
+
+#[cfg(feature = "cpu_stm32g030")]
+pub type Channel = stm32::dma1::ch::CH;
 
 #[cfg(feature = "cpu_stm32u031")]
 pub type Channel = stm32u031::dma1::ch::CH;
@@ -67,7 +71,7 @@ impl DMA_Channel for Channel {
     }
 }
 
-#[cfg(feature = "cpu_stm32u031")]
+#[cfg(any(feature = "cpu_stm32u031", feature = "cpu_stm32g030"))]
 impl DMA_Channel for Channel {
     fn write(&self, data: usize, len: usize, size: u8) {
         setup(self, data, len, size, true)}
@@ -83,11 +87,11 @@ impl DMA_Channel for Channel {
         // For some reason unsigned_offset_from here leads to crashes.  So
         // do it by hand.
         let me = self as *const Self;
-        let dma = unsafe {&*stm32u031::DMA1::ptr()};
+        let dma = unsafe {&*stm32::DMA1::ptr()};
         let ch0 = dma.CH(0) as *const Self;
         let index = (me.addr() - ch0.addr()) / size_of::<Self>();
         // dbgln!("DMA Index = {index}");
-        let dmamux = unsafe {&*stm32u031::DMAMUX::ptr()};
+        let dmamux = unsafe {&*stm32::DMAMUX::ptr()};
         dmamux.CCR[index].write(|w| w.bits(request as u32));
     }
 
@@ -96,7 +100,7 @@ impl DMA_Channel for Channel {
     }
 }
 
-#[cfg(feature = "cpu_stm32u031")]
+#[cfg(any(feature = "cpu_stm32u031", feature = "cpu_stm32g030"))]
 fn setup(ch: &Channel, data: usize, len: usize, size: u8, write: bool) {
     ch.MAR .write(|w| w.bits(data as u32));
     ch.NDTR.write(|w| w.bits(len as u32));

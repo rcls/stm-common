@@ -7,10 +7,13 @@ edition = '2024'
 
 [features]
 debug_lpuart = []
+cpu_stm32g030 = ['dep:stm32g030']
 cpu_stm32h503 = ['dep:stm32h503']
 cpu_stm32u031 = ['dep:stm32u031']
+internal_debug = []
 
 [dependencies]
+stm32g030 = {git = 'https://github.com/rcls/pac-stm32g030.git', optional = true}
 stm32h503 = {git = 'https://github.com/rcls/pac-stm32h503.git', optional = true}
 stm32u031 = {git = 'https://github.com/rcls/pac-stm32u031.git', optional = true}
 konst = '*'

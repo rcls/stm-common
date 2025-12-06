@@ -16,6 +16,12 @@ pub fn WFE() {
     }
 }
 
+pub fn reboot() -> ! {
+    loop {
+        unsafe {(*cortex_m::peripheral::SCB::PTR).aircr.write(0x05fa0004)};
+    }
+}
+
 /// Calling this function will cause a linker error when building the firmware,
 /// unless the compiler optimises it away completely.
 ///

@@ -8,7 +8,6 @@ pub mod types;
 use crate::usb::hardware::{
     CTRL_RX_OFFSET, CheprWriter, bd_control, chep_block, chep_ctrl};
 use crate::usb::types::{SetupHeader, SetupResult};
-use control::ControlState;
 
 macro_rules!ctrl_dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 macro_rules!usb_dbgln  {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
@@ -70,9 +69,31 @@ pub struct DataEndPoints<UT: USBTypes> {
 
 #[allow(non_camel_case_types)]
 pub struct USB_State<UT: USBTypes> {
-    pub ep0: ControlState<UT>,
-    pub eps: DataEndPoints<UT>,
-    pub app: UT,
+    /// Meta-data: descriptors etc.
+    pub meta: UT,
+    /// Last set-up received, while we are processing it.
+    setup: SetupHeader,
+    /// Set-up data to send.  On TX ACK we send the next block.
+    setup_data: SetupResult,
+    /// If set, the TX setup data is shorter than the requested data and we must
+    /// end with a zero-length packet if needed.
+    setup_short: bool,
+    /// Address received in a SET ADDRESS.  On TX ACK, we apply this.
+    pending_address: Option<u8>,
+    /// Are we configured?
+    configured: bool,
+    /// Callback for post-setup OUT data.  We only support single packets!
+    setup_rx_cb: Option<fn() -> bool>,
+    /// Callback for post-setup IN data (or ACK) completion.
+    setup_tx_cb: control::SetupTxCallback,
+
+    pub ep1: UT::EP1,
+    pub ep2: UT::EP2,
+    pub ep3: UT::EP3,
+    pub ep4: UT::EP4,
+    pub ep5: UT::EP5,
+    pub ep6: UT::EP6,
+    pub ep7: UT::EP7,
 }
 
 impl<UT: USBTypes> const Default for DataEndPoints<UT> {
@@ -89,9 +110,22 @@ impl<UT: USBTypes> const Default for DataEndPoints<UT> {
 
 impl<UT: USBTypes + const Default> const Default for USB_State<UT> {
     fn default() -> Self {Self{
-        ep0: ControlState::default(),
-        eps: Default::default(),
-        app: UT::default(),
+        meta: UT::default(),
+        setup: SetupHeader::default(),
+        setup_data: SetupResult::default(),
+        setup_short: false,
+        pending_address: None,
+        configured: false,
+        setup_rx_cb: None,
+        setup_tx_cb: None,
+
+        ep1: Default::default(),
+        ep2: Default::default(),
+        ep3: Default::default(),
+        ep4: Default::default(),
+        ep5: Default::default(),
+        ep6: Default::default(),
+        ep7: Default::default(),
     }}
 }
 
@@ -161,22 +195,22 @@ impl<UT: USBTypes> USB_State<UT> {
                 Self::errata_delay();
             }
             match istr.bits() & 31 {
-                0  => self.ep0.tx_handler(&mut self.eps),
-                1  => self.eps.ep1.tx_handler(),
-                2  => self.eps.ep2.tx_handler(),
-                3  => self.eps.ep3.tx_handler(),
-                4  => self.eps.ep4.tx_handler(),
-                5  => self.eps.ep5.tx_handler(),
-                6  => self.eps.ep6.tx_handler(),
-                7  => self.eps.ep7.tx_handler(),
-                16 => self.ep0.rx_handler(&mut self.eps),
-                17 => self.eps.ep1.rx_handler(),
-                18 => self.eps.ep2.rx_handler(),
-                19 => self.eps.ep3.rx_handler(),
-                20 => self.eps.ep4.rx_handler(),
-                21 => self.eps.ep5.rx_handler(),
-                22 => self.eps.ep6.rx_handler(),
-                23 => self.eps.ep7.rx_handler(),
+                0  => self.control_tx_handler(),
+                1  => self.ep1.tx_handler(),
+                2  => self.ep2.tx_handler(),
+                3  => self.ep3.tx_handler(),
+                4  => self.ep4.tx_handler(),
+                5  => self.ep5.tx_handler(),
+                6  => self.ep6.tx_handler(),
+                7  => self.ep7.tx_handler(),
+                16 => self.control_rx_handler(),
+                17 => self.ep1.rx_handler(),
+                18 => self.ep2.rx_handler(),
+                19 => self.ep3.rx_handler(),
+                20 => self.ep4.rx_handler(),
+                21 => self.ep5.rx_handler(),
+                22 => self.ep6.rx_handler(),
+                23 => self.ep7.rx_handler(),
                 _  => {
                     dbgln!("Bugger endpoint?, ISTR = {:#010x}", istr.bits());
                     break;  // FIXME, this will hang!
@@ -196,21 +230,20 @@ impl<UT: USBTypes> USB_State<UT> {
     /// push through any pending data.  Hopefully quickly enough for the actual
     /// IN request.
     fn start_of_frame(&mut self) {
-        self.ep0.start_of_frame();
-        self.eps.ep1.start_of_frame();
-        self.eps.ep2.start_of_frame();
-        self.eps.ep3.start_of_frame();
-        self.eps.ep4.start_of_frame();
-        self.eps.ep5.start_of_frame();
-        self.eps.ep6.start_of_frame();
-        self.eps.ep7.start_of_frame();
+        self.ep1.start_of_frame();
+        self.ep2.start_of_frame();
+        self.ep3.start_of_frame();
+        self.ep4.start_of_frame();
+        self.ep5.start_of_frame();
+        self.ep6.start_of_frame();
+        self.ep7.start_of_frame();
     }
 
     fn usb_initialize(&mut self) {
         let usb = unsafe {&*stm32h503::USB::ptr()};
         usb_dbgln!("USB initialize...");
 
-        self.ep0.usb_initialize();
+        self.control_initialize();
 
         usb.CNTR.write(
             |w|w.PDWN().clear_bit().USBRST().clear_bit()

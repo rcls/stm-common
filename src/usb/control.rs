@@ -1,51 +1,16 @@
 
-use core::marker::PhantomData;
 use crate::utils::barrier;
 
-use super::{DataEndPoints, USBTypes, ctrl_dbgln, usb_dbgln};
+use super::{USBTypes, ctrl_dbgln, usb_dbgln};
 use super::types::*;
 use super::hardware::*;
 
 use crate::usb::EndpointPair;
 
-type SetupTxCallback = Option<fn(&SetupHeader)>;
+pub type SetupTxCallback = Option<fn(&SetupHeader)>;
 
-pub struct ControlState<UT: USBTypes> {
-    /// Meta-data: desriptors etc.
-    meta: UT,
-    /// Last set-up received, while we are processing it.
-    setup: SetupHeader,
-    /// Set-up data to send.  On TX ACK we send the next block.
-    setup_data: SetupResult,
-    /// If set, the TX setup data is shorter than the requested data and we must
-    /// end with a zero-length packet if needed.
-    setup_short: bool,
-    /// Address received in a SET ADDRESS.  On TX ACK, we apply this.
-    pending_address: Option<u8>,
-    /// Are we configured?
-    configured: bool,
-    /// Callback for post-setup OUT data.  We only support single packets!
-    pending_rx_cb: Option<fn() -> bool>,
-    pending_tx_cb: SetupTxCallback,
-    dummy: PhantomData<UT>,
-}
-
-impl<UT: USBTypes> const Default for ControlState<UT> {
-    fn default() -> Self {Self{
-        meta: UT::default(),
-        setup: SetupHeader::default(),
-        setup_data: SetupResult::default(),
-        setup_short: false,
-        pending_address: None,
-        configured: false,
-        pending_rx_cb: None,
-        pending_tx_cb: None,
-        dummy: PhantomData,
-    }}
-}
-
-impl<UT: USBTypes> ControlState<UT> {
-    pub fn tx_handler(&mut self, _: &mut DataEndPoints<UT>) {
+impl<UT: USBTypes> super::USB_State<UT> {
+    pub fn control_tx_handler(&mut self) {
         let chep = chep_ctrl().read();
         ctrl_dbgln!("Control TX handler CHEP0 = {:#010x}", chep.bits());
 
@@ -61,8 +26,8 @@ impl<UT: USBTypes> ControlState<UT> {
             return;
         }
 
-        if let Some(cb) = self.pending_tx_cb {
-            self.pending_tx_cb = None;
+        if let Some(cb) = self.setup_tx_cb {
+            self.setup_tx_cb = None;
             cb(&self.setup);
             self.setup = SetupHeader::default();
         }
@@ -71,7 +36,7 @@ impl<UT: USBTypes> ControlState<UT> {
             |w|w.control().VTTX().clear_bit().rx_valid(&chep).dtogrx(&chep, false));
     }
 
-    pub fn rx_handler(&mut self, eps: &mut DataEndPoints<UT>) {
+    pub fn control_rx_handler(&mut self) {
         let chep = chep_ctrl().read();
         ctrl_dbgln!("Control RX handler CHEP0 = {:#010x}", chep.bits());
 
@@ -112,14 +77,14 @@ impl<UT: USBTypes> ControlState<UT> {
         let setup = unsafe {SetupHeader::from_ptr(CTRL_RX_BUF)};
         self.setup = setup;
 
-        let result = self.setup_rx_handler(&setup, eps);
+        let result = self.setup_rx_handler(&setup);
         match result {
             SetupResult::Tx(data, cb) => self.setup_send_data(&setup, data, cb),
             SetupResult::Rx(len, cb)
                 if len == setup.length as usize && len != 0 => {
                 // Receive some data (if len != 0).  TODO: is the length match
                 // guarenteed?
-                self.pending_rx_cb = cb;
+                self.setup_rx_cb = cb;
                 chep_ctrl().write(
                     |w|w.control().VTRX().clear_bit().rx_valid(&chep)
                         .dtogrx(&chep, true) //.dtogtx(&chep, true)
@@ -140,19 +105,16 @@ impl<UT: USBTypes> ControlState<UT> {
         }
     }
 
-    pub fn usb_initialize(&mut self) {
+    pub fn control_initialize(&mut self) {
         *self = Self::default();
     }
 
-    pub fn start_of_frame(&mut self) {}
-
-    fn setup_rx_handler(&mut self, setup: &SetupHeader,
-                        eps: &mut DataEndPoints<UT>)
+    fn setup_rx_handler(&mut self, setup: &SetupHeader)
             -> SetupResult {
         // Cancel any pending set-address and set-up data.
         self.pending_address = None;
         self.setup_data = SetupResult::default();
-        self.pending_rx_cb = None;
+        self.setup_rx_cb = None;
 
         let bd = bd_control().rx.read();
         let len = bd >> 16 & 0x03ff;
@@ -182,26 +144,26 @@ impl<UT: USBTypes> ControlState<UT> {
             (0x01, 0x0b) => SetupResult::no_data(), // Set interface
 
             _ => {
-                if eps.ep1.setup_wanted(setup) {
-                    return eps.ep1.setup_handler(setup);
+                if self.ep1.setup_wanted(setup) {
+                    return self.ep1.setup_handler(setup);
                 }
-                if eps.ep2.setup_wanted(setup) {
-                    return eps.ep2.setup_handler(setup);
+                if self.ep2.setup_wanted(setup) {
+                    return self.ep2.setup_handler(setup);
                 }
-                if eps.ep3.setup_wanted(setup) {
-                    return eps.ep3.setup_handler(setup);
+                if self.ep3.setup_wanted(setup) {
+                    return self.ep3.setup_handler(setup);
                 }
-                if eps.ep4.setup_wanted(setup) {
-                    return eps.ep4.setup_handler(setup);
+                if self.ep4.setup_wanted(setup) {
+                    return self.ep4.setup_handler(setup);
                 }
-                if eps.ep5.setup_wanted(setup) {
-                    return eps.ep5.setup_handler(setup);
+                if self.ep5.setup_wanted(setup) {
+                    return self.ep5.setup_handler(setup);
                 }
-                if eps.ep6.setup_wanted(setup) {
-                    return eps.ep6.setup_handler(setup);
+                if self.ep6.setup_wanted(setup) {
+                    return self.ep6.setup_handler(setup);
                 }
-                if eps.ep7.setup_wanted(setup) {
-                    return eps.ep7.setup_handler(setup);
+                if self.ep7.setup_wanted(setup) {
+                    return self.ep7.setup_handler(setup);
                 }
                 usb_dbgln!("Unknown setup {:02x} {:02x} {:02x} {:02x} -> {}",
                            setup.request_type, setup.request,
@@ -214,8 +176,8 @@ impl<UT: USBTypes> ControlState<UT> {
     /// Process just received setup OUT data.
     fn setup_rx_data(&mut self) -> bool {
         // First check that we really were expecting data.
-        let Some(cb) = self.pending_rx_cb else {return false};
-        self.pending_rx_cb = None;
+        let Some(cb) = self.setup_rx_cb else {return false};
+        self.setup_rx_cb = None;
         cb()
     }
 
@@ -247,7 +209,7 @@ impl<UT: USBTypes> ControlState<UT> {
         }
         else {
             self.setup_data = SetupResult::default();
-            self.pending_tx_cb = cb;
+            self.setup_tx_cb = cb;
         }
 
         // If the length is zero, then we are sending an ack.  If the length

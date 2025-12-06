@@ -4,16 +4,20 @@
 //!
 //! We assume that the crate we are part of contains a few things...
 
-use stm_common::utils::{WFE, barrier};
+use crate::utils::{WFE, barrier};
+use crate::vcell::{UCell, VCell};
 
 use core::marker::PhantomData;
-use stm_common::vcell::{UCell, VCell};
 
-use super::{DEBUG, INTERRUPT, UART, lazy_init};
+#[cfg(feature = "cpu_stm32h503")]
+type UART = stm32h503::USART3;
 
 pub trait DebugMeta: Sized + 'static {
     const ENABLE: bool = true;
+    const INTERRUPT: u32;
     fn get_debug() -> &'static Debug<Self>;
+    fn lazy_init();
+    fn is_init() -> bool;
 }
 
 pub struct Debug<M> {
@@ -44,7 +48,7 @@ impl<M: DebugMeta> Debug<M> {
         if !M::ENABLE {
             return;
         }
-        lazy_init();
+        M::lazy_init();
         let mut w = self.w.read();
         for &b in s {
             while self.r.read().wrapping_sub(w) == 1 {
@@ -63,8 +67,8 @@ impl<M: DebugMeta> Debug<M> {
         // twice in case there is a race condition where we read pending on an
         // enabled interrupt.
         let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-        let bit: usize = INTERRUPT as usize % 32;
-        let idx: usize = INTERRUPT as usize / 32;
+        let bit: usize = M::INTERRUPT as usize % 32;
+        let idx: usize = M::INTERRUPT as usize / 32;
         if nvic.icpr[idx].read() & 1 << bit == 0 {
             return;
         }
@@ -72,7 +76,7 @@ impl<M: DebugMeta> Debug<M> {
         // loop.
         while nvic.icpr[idx].read() & 1 << bit != 0 {
             unsafe {nvic.icpr[idx].write(1 << bit)};
-            DEBUG.isr();
+            self.isr();
         }
     }
     fn enable(&self, w: u8) {
@@ -116,7 +120,7 @@ impl<M: DebugMeta> Debug<M> {
 }
 
 pub fn flush<M: DebugMeta>() {
-    if !M::ENABLE || !super::is_init() {
+    if !M::ENABLE || !M::is_init() {
         return;                        // Not initialized, nothing to do.
     }
 
@@ -127,7 +131,7 @@ pub fn flush<M: DebugMeta>() {
     // Wait for the TC bit.
     loop {
         let isr = uart.ISR.read();
-        if debug.r.read() == DEBUG.w.read()
+        if debug.r.read() == debug.w.read()
             && isr.TC().bit() && isr.TXFE().bit() {
             break;
         }
@@ -172,7 +176,7 @@ macro_rules! dbgln {
         let _ = core::fmt::Write::write_str(
             &mut crate::debug::debug_marker(), "\n");
         }};
-    ($($tt:tt)*) => {if $crate::debug::ENABLE {
+    ($($tt:tt)*) => {if crate::debug::ENABLE {
         let _ = core::fmt::Write::write_fmt(
             &mut crate::debug::debug_marker(), format_args_nl!($($tt)*));
         }};

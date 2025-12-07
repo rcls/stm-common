@@ -17,19 +17,20 @@ pub type UART = crate::stm32::usart1::RegisterBlock;
 pub type UART = crate::stm32::lpuart1::RegisterBlock;
 
 pub trait Meta: Sized + 'static {
-    const ENABLE: bool = true;
-    const INTERRUPT: u32;
     fn debug() -> &'static Debug<Self>;
-    fn uart() -> &'static UART;
-    fn lazy_init();
-    fn is_init() -> bool;
+    fn uart(&self) -> &'static UART;
+    fn lazy_init(&self);
+    fn is_init(&self) -> bool;
+    fn interrupt(&self) -> u32;
+
+    const ENABLE: bool = true;
 }
 
 pub struct Debug<M> {
     pub w: VCell<u8>,
     pub r: VCell<u8>,
     buf: [UCell<u8>; 256],
-    phantom: PhantomData<M>,
+    meta: M,
 }
 
 #[derive(Default)]
@@ -37,12 +38,12 @@ pub struct Marker<M> {
     meta: PhantomData<M>,
 }
 
-impl<M> const Default for Debug<M> {
+impl<M: const Default> const Default for Debug<M> {
     fn default() -> Debug<M> {
         Debug {
             w: VCell::new(0), r: VCell::new(0),
             buf: [const {UCell::new(0)}; 256],
-            phantom: PhantomData,
+            meta: M::default(),
         }
     }
 }
@@ -52,7 +53,7 @@ impl<M: Meta> Debug<M> {
         if !M::ENABLE {
             return;
         }
-        M::lazy_init();
+        self.meta.lazy_init();
         let mut w = self.w.read();
         for &b in s {
             while self.r.read().wrapping_sub(w) == 1 {
@@ -72,8 +73,9 @@ impl<M: Meta> Debug<M> {
         // twice in case there is a race condition where we read pending on an
         // enabled interrupt.
         let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-        let bit: usize = M::INTERRUPT as usize % 32;
-        let idx: usize = M::INTERRUPT as usize / 32;
+        let interrupt = self.meta.interrupt();
+        let bit: usize = interrupt as usize % 32;
+        let idx: usize = interrupt as usize / 32;
         if nvic.icpr[idx].read() & 1 << bit == 0 {
             return;
         }
@@ -89,7 +91,7 @@ impl<M: Meta> Debug<M> {
         barrier();
         self.w.write(w);
 
-        let uart = M::uart();
+        let uart = self.meta.uart();
         // Use the FIFO empty interrupt.  Normally we should be fast enough
         // to refill before the last byte finishes.
         uart.CR1.write(
@@ -101,7 +103,7 @@ impl<M: Meta> Debug<M> {
         if !M::ENABLE {
             return;
         }
-        let uart = M::uart();
+        let uart = self.meta.uart();
         let sr = uart.ISR.read();
         if sr.TC().bit() {
             uart.CR1.modify(|_,w| w.TCIE().clear_bit());
@@ -127,12 +129,12 @@ impl<M: Meta> Debug<M> {
 }
 
 pub fn flush<M: Meta>() {
-    if !M::ENABLE || !M::is_init() {
+    let debug = M::debug();
+    if !M::ENABLE || !debug.meta.is_init() {
         return;                        // Not initialized, nothing to do.
     }
 
-    let uart = M::uart();
-    let debug = M::debug();
+    let uart = debug.meta.uart();
     // Enable the TC interrupt.
     uart.CR1.modify(|_,w| w.TCIE().set_bit());
     // Wait for the TC bit.

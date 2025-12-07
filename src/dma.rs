@@ -13,7 +13,7 @@ pub trait DMA_Channel {
     fn read(&self, data: usize, len: usize, size: u8);
 
     /// Configure to write to a peripheral from memory.
-    fn writes_to(&self, dst: *mut   u8, request: u8);
+    fn writes_to(&self, dst: *mut u8, request: u8);
     /// Configure to read from a peripheral to memory.
     fn read_from(&self, src: *const u8, request: u8);
 
@@ -39,22 +39,26 @@ impl DMA_Channel for Channel {
         barrier();
         self.CR.write(|w| w.EN().set_bit().TCIE().set_bit());
     }
+
     fn read(&self, data: usize, len: usize, _size: u8) {
         self.DAR().write(|w| w.DA().bits(data as u32));
         self.BR1.write(|w| w.BNDT().bits(len as u16));
         barrier();
         self.CR.write(|w| w.EN().set_bit().TCIE().set_bit());
     }
+
     fn writes_to(&self, dst: *mut u8, request: u8) {
         self.DAR().write(|w| w.DA().bits(dst as u32));
         self.TR1.write(|w| w.SINC().set_bit());
         self.TR2.write(|w| w.REQSEL().bits(request));
     }
+
     fn read_from(&self, src: *const u8, request: u8) {
         self.SAR().write(|w| w.SA().bits(src as u32));
         self.TR1.write(|w| w.DINC().set_bit());
         self.TR2.write(|w| w.REQSEL().bits(request));
     }
+
     fn abort(&self) {
         if self.CR.read().EN().bit() {
             self.CR.write(|w| w.SUSP().set_bit());
@@ -63,6 +67,7 @@ impl DMA_Channel for Channel {
             self.FCR.write(|w| w.bits(!0));
         }
     }
+
     fn busy(&self) -> bool {
         self.CR.read().EN().bit()
     }

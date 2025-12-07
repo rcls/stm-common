@@ -4,6 +4,7 @@
 #![feature(associated_type_defaults)]
 #![feature(const_default)]
 #![feature(const_trait_impl)]
+#![feature(default_field_values)]
 #![feature(derive_const)]
 #![feature(format_args_nl)]
 #![feature(generic_const_exprs)]

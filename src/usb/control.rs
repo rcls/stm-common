@@ -2,8 +2,9 @@
 use crate::utils::barrier;
 
 use super::{USBMeta, usb_dbgln};
-use super::types::*;
-use super::hardware::*;
+use super::hardware::{CTRL_RX_BUF, CTRL_TX_BUF, CTRL_TX_OFFSET, CheprWriter,
+                      bd_control, chep_bd_tx, chep_ctrl, copy_by_dest32};
+use super::types::{SetupHeader, SetupResult};
 
 use crate::usb::EndpointPair;
 

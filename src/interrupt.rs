@@ -27,10 +27,29 @@ pub fn enable(n: crate::stm32::Interrupt) {
     unsafe {nvic.iser[idx].write(1u32 << bit)};
 }
 
+trait SetByte {
+    fn set_byte(&self, n: usize, val: u8);
+}
+
+impl<const N: usize> SetByte for [volatile_register::RW<u8>; N] {
+    fn set_byte(&self, n: usize, val: u8) {
+        unsafe {self[n].write(val)}
+    }
+}
+
+impl<const N: usize> SetByte for [volatile_register::RW<u32>; N] {
+    fn set_byte(&self, n: usize, val: u8) {
+        let reg = &self[n / 4];
+        let mask = 0xff << n % 4 * 8;
+        let new = reg.read() & !mask | (val as u32) << n % 4 * 8;
+        unsafe {reg.write(new)}
+    }
+}
+
 pub fn enable_priority(n: crate::stm32::Interrupt, p: u8) {
     let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
-    crate::link_assert!(size_of_val(&nvic.ipr[n as usize]) == 1);
-    unsafe {nvic.ipr[n as usize].write(p)};
+
+    nvic.ipr.set_byte(n as usize, p);
 
     enable(n);
 }

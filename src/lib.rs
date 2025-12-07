@@ -35,17 +35,22 @@ const DEBUG_ENABLE: bool = cfg!(feature = "internal_debug");
 
 fn debug_fmt(fmt: Arguments) {
     if DEBUG_ENABLE {
-        if let Some(f) = *GLOBAL_DEBUG.as_ref() {
+        if let Some(f) = *DEBUG_HANDLER.as_ref() {
             f(fmt);
         }
     }
 }
 
+/// Set the handler for dbgln! uses within this crate.
+///
+/// SAFETY:  The user must ensure this is not called concurrently with any
+/// dbgln! invocations from this crate.  Typically, do it once, before the rest
+/// of the library is initialized and interrupts enabled.
 #[inline]
-pub unsafe fn set_global_debug(f: Option<fn(Arguments)>) {
+pub unsafe fn set_debug_handler(f: Option<fn(Arguments)>) {
     if DEBUG_ENABLE {
-        *unsafe {GLOBAL_DEBUG.as_mut()} = f;
+        *unsafe {DEBUG_HANDLER.as_mut()} = f;
     }
 }
 
-static GLOBAL_DEBUG: UCell<Option<fn(Arguments)>> = UCell::default();
+static DEBUG_HANDLER: UCell<Option<fn(Arguments)>> = UCell::default();

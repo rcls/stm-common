@@ -3,8 +3,6 @@ use crate::vcell::VCell;
 use crate::utils::{WFE, barrier};
 use crate::dma::{Channel, DMA_Channel};
 
-use core::marker::PhantomData;
-
 pub type Result = core::result::Result<(), ()>;
 
 #[derive_const(Default)]
@@ -12,16 +10,16 @@ pub struct I2cContext<M> {
     pub outstanding: VCell<u8>,
     error: VCell<u8>,
     pending_len: VCell<usize>,
-    phantom: PhantomData<M>
+    pub meta: M,
 }
 
 pub trait Meta {
-    fn i2c() -> &'static crate::stm32::i2c1::RegisterBlock;
-    fn rx_channel() -> &'static Channel;
-    fn tx_channel() -> &'static Channel;
+    fn i2c(&self) -> &'static crate::stm32::i2c1::RegisterBlock;
+    fn rx_channel(&self) -> &'static Channel;
+    fn tx_channel(&self) -> &'static Channel;
 
-    const RX_MUXIN: u8;
-    const TX_MUXIN: u8;
+    fn rx_muxin(&self) -> u8;
+    fn tx_muxin(&self) -> u8;
 }
 
 pub const F_I2C: u8 = 1;
@@ -32,7 +30,7 @@ macro_rules!dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
 impl<M: Meta> I2cContext<M> {
     pub fn isr(&mut self) {
-        let i2c = M::i2c();
+        let i2c = self.meta.i2c();
 
         let status = i2c.ISR.read();
         dbgln!("I2C ISR {:#x}", status.bits());
@@ -76,7 +74,7 @@ impl<M: Meta> I2cContext<M> {
 
     pub fn read_reg_start(&self, addr: u8, reg: u8, data: usize, len: usize) {
         // Should only be called while I2C idle...
-        let i2c = M::i2c();
+        let i2c = self.meta.i2c();
         self.arm(F_I2C | F_DMA_RX);
         self.pending_len.write(len);
 
@@ -86,13 +84,13 @@ impl<M: Meta> I2cContext<M> {
             |w| w.START().set_bit().SADD().bits(addr as u16).NBYTES().bits(1));
         i2c.TXDR.write(|w| w.bits(reg as u32));
 
-        M::rx_channel().read(data, len, 0);
+        self.meta.rx_channel().read(data, len, 0);
     }
     #[inline(never)]
     pub fn read_start(&self, addr: u8, data: usize, len: usize) {
-        let i2c = M::i2c();
+        let i2c = self.meta.i2c();
 
-        M::rx_channel().read(data, len, 0);
+        self.meta.rx_channel().read(data, len, 0);
         self.arm(F_I2C | F_DMA_RX);
         i2c.CR2.write(
             |w|w.START().set_bit().AUTOEND().bit(true).SADD().bits(addr as u16)
@@ -100,32 +98,32 @@ impl<M: Meta> I2cContext<M> {
     }
     #[inline(never)]
     pub fn write_reg_start(&self, addr: u8, reg: u8, data: usize, len: usize) {
-        let i2c = M::i2c();
+        let i2c = self.meta.i2c();
 
         self.arm(F_I2C | F_DMA_TX);
         i2c.CR2.write(
             |w| w.START().set_bit().AUTOEND().set_bit()
                 . SADD().bits(addr as u16).NBYTES().bits(len as u8 + 1));
         i2c.TXDR.write(|w| w.TXDATA().bits(reg));
-        M::tx_channel().write(data, len, 0);
+        self.meta.tx_channel().write(data, len, 0);
     }
     #[inline(never)]
     pub fn write_start(&self, addr: u8, data: usize, len: usize, last: bool) {
-        let i2c = M::i2c();
+        let i2c = self.meta.i2c();
 
         self.arm(F_I2C | F_DMA_TX);
         i2c.CR2.write(
             |w| w.START().set_bit().AUTOEND().bit(last)
                 . SADD().bits(addr as u16).NBYTES().bits(len as u8));
-        M::tx_channel().write(data, len, 0);
+        self.meta.tx_channel().write(data, len, 0);
     }
 
     #[inline(never)]
     pub fn write_read_start(&self, addr: u8, wdata: usize, wlen: usize,
                         rdata: usize, rlen: usize) {
-        let i2c = M::i2c();
-        M::tx_channel().write(wdata, wlen, 0);
-        M::rx_channel().read (rdata, rlen, 0);
+        let i2c = self.meta.i2c();
+        self.meta.tx_channel().write(wdata, wlen, 0);
+        self.meta.rx_channel().read (rdata, rlen, 0);
         self.pending_len.write(rlen);
         self.arm(F_I2C | F_DMA_TX | F_DMA_RX);
         i2c.CR2.write(
@@ -148,25 +146,25 @@ impl<M: Meta> I2cContext<M> {
             Ok(())
         }
         else {
-            Self::error_cleanup();
+            self.error_cleanup();
             Err(())
         }
     }
-    pub fn error_cleanup() {
+    pub fn error_cleanup(&self) {
         dbgln!("I2C error cleanup");
-        let i2c = M::i2c();
+        let i2c = self.meta.i2c();
         // Clean-up the DMA and reset the I2C.
         i2c.CR1.write(|w| w.PE().clear_bit());
-        M::tx_channel().abort();
-        M::rx_channel().abort();
+        self.meta.tx_channel().abort();
+        self.meta.rx_channel().abort();
 
-        Self::initialize();
+        self.initialize();
     }
 
-    pub fn initialize() {
-        let i2c = M::i2c();
-        M::rx_channel().read_from(i2c.RXDR.as_ptr() as *const u8, M::RX_MUXIN);
-        M::tx_channel().writes_to(i2c.TXDR.as_ptr() as *mut   u8, M::TX_MUXIN);
+    pub fn initialize(&self) {
+        let i2c = self.meta.i2c();
+        self.meta.rx_channel().read_from(i2c.RXDR.as_ptr() as *const u8, self.meta.rx_muxin());
+        self.meta.tx_channel().writes_to(i2c.TXDR.as_ptr() as *mut u8, self.meta.tx_muxin());
         i2c.CR1.write(
             |w|w.TXDMAEN().set_bit().RXDMAEN().set_bit().PE().set_bit()
                 .NACKIE().set_bit().ERRIE().set_bit().TCIE().set_bit()

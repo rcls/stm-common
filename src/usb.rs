@@ -1,5 +1,5 @@
 
-pub mod control;
+mod control;
 pub mod hardware;
 pub mod string;
 pub mod types;
@@ -9,11 +9,10 @@ use crate::usb::hardware::{
     CTRL_RX_OFFSET, CheprWriter, bd_control, chep_block, chep_ctrl};
 use crate::usb::types::{SetupHeader, SetupResult};
 
-macro_rules!ctrl_dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 macro_rules!usb_dbgln  {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 macro_rules!fast_dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
 
-pub(crate) use {ctrl_dbgln, usb_dbgln};
+pub(crate) use usb_dbgln;
 
 pub trait EndpointPair: const Default {
     /// Handler for RX done notifications.
@@ -36,7 +35,7 @@ pub trait EndpointPair: const Default {
     fn initialize() {}
 }
 
-pub trait USBTypes: const Default {
+pub trait USBMeta: const Default {
     fn get_device_descriptor(&mut self) -> SetupResult;
     fn get_config_descriptor(&mut self, setup: &SetupHeader) -> SetupResult;
     fn get_string_descriptor(&mut self, idx: u8) -> SetupResult;
@@ -57,7 +56,7 @@ pub trait USBTypes: const Default {
 pub struct DummyEndPoint;
 impl EndpointPair for DummyEndPoint {}
 
-pub struct DataEndPoints<UT: USBTypes> {
+pub struct DataEndPoints<UT: USBMeta> {
     pub ep1: UT::EP1,
     pub ep2: UT::EP2,
     pub ep3: UT::EP3,
@@ -68,7 +67,7 @@ pub struct DataEndPoints<UT: USBTypes> {
 }
 
 #[allow(non_camel_case_types)]
-pub struct USB_State<UT: USBTypes> {
+pub struct USB_State<UT: USBMeta> {
     /// Meta-data: descriptors etc.
     pub meta: UT,
     /// Last set-up received, while we are processing it.
@@ -96,7 +95,7 @@ pub struct USB_State<UT: USBTypes> {
     pub ep7: UT::EP7,
 }
 
-impl<UT: USBTypes> const Default for DataEndPoints<UT> {
+impl<UT: USBMeta> const Default for DataEndPoints<UT> {
     fn default() -> Self {Self{
         ep1: UT::EP1::default(),
         ep2: UT::EP2::default(),
@@ -108,7 +107,7 @@ impl<UT: USBTypes> const Default for DataEndPoints<UT> {
     }}
 }
 
-impl<UT: USBTypes + const Default> const Default for USB_State<UT> {
+impl<UT: USBMeta + const Default> const Default for USB_State<UT> {
     fn default() -> Self {Self{
         meta: UT::default(),
         setup: SetupHeader::default(),
@@ -129,9 +128,9 @@ impl<UT: USBTypes + const Default> const Default for USB_State<UT> {
     }}
 }
 
-unsafe impl<UT: USBTypes> Sync for USB_State<UT> {}
+unsafe impl<UT: USBMeta> Sync for USB_State<UT> {}
 
-impl<UT: USBTypes> USB_State<UT> {
+impl<UT: USBMeta> USB_State<UT> {
     pub fn init(&mut self) {
         let crs   = unsafe {&*stm32h503::CRS  ::ptr()};
         let gpioa = unsafe {&*stm32h503::GPIOA::ptr()};

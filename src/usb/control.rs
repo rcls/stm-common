@@ -1,7 +1,7 @@
 
 use crate::utils::barrier;
 
-use super::{USBTypes, ctrl_dbgln, usb_dbgln};
+use super::{USBMeta, usb_dbgln};
 use super::types::*;
 use super::hardware::*;
 
@@ -9,7 +9,9 @@ use crate::usb::EndpointPair;
 
 pub type SetupTxCallback = Option<fn(&SetupHeader)>;
 
-impl<UT: USBTypes> super::USB_State<UT> {
+macro_rules!ctrl_dbgln {($($tt:tt)*) => {if false {crate::dbgln!($($tt)*)}};}
+
+impl<UT: USBMeta> super::USB_State<UT> {
     pub fn control_tx_handler(&mut self) {
         let chep = chep_ctrl().read();
         ctrl_dbgln!("Control TX handler CHEP0 = {:#010x}", chep.bits());

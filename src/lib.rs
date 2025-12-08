@@ -44,7 +44,8 @@ fn debug_fmt(fmt: Arguments) {
 
 /// Set the handler for dbgln! uses within this crate.
 ///
-/// SAFETY:  The user must ensure this is not called concurrently with any
+/// # Safety
+/// The user must ensure this is not called concurrently with any
 /// dbgln! invocations from this crate.  Typically, do it once, before the rest
 /// of the library is initialized and interrupts enabled.
 #[inline]

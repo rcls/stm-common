@@ -21,19 +21,29 @@ impl<T: const Default> const Default for VCell<T> {
 impl<T> VCell<T> {
     pub const fn new(v: T) -> Self {Self(UnsafeCell::new(v))}
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
-    pub fn as_mut(&mut self) -> &mut T {self.0.get_mut()}
+}
+
+impl<T> AsMut<T> for VCell<T> {
+    fn as_mut(&mut self) -> &mut T {self.0.get_mut()}
 }
 
 impl<T: Sync> UCell<T> {
     pub const fn new(v: T) -> Self {Self(UnsafeCell::new(v))}
-    pub fn as_ref(&self) -> &T {unsafe{&*(self.0.get() as *const T)}}
     pub fn as_ptr(&self) -> *mut T {self.0.get()}
-    /// Get mutable access.  SAFETY:  It is up to the caller to ensure that
-    /// mutability is handled correctly.
+
+    /// Get mutable access.
+    ///
+    /// # Safety
+    /// It is up to the caller to ensure that mutability is handled
+    /// correctly.
     /// 
     /// This means that the caller needs to take into account all users of
     /// `as_ref()`.
     pub unsafe fn as_mut(&self) -> &mut T {unsafe{&mut *self.0.get()}}
+}
+
+impl<T:Sync> AsRef<T> for UCell<T> {
+    fn as_ref(&self) -> &T {unsafe{&*(self.0.get() as *const T)}}
 }
 
 impl<T: Sync> core::ops::Deref for UCell<T> {

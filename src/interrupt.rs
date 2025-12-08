@@ -1,6 +1,5 @@
 use crate::utils::unreachable;
 
-
 #[cfg(any(feature = "cpu_stm32u031", feature = "cpu_stm32g030"))]
 pub const NUM_INTERRUPTS: usize = 32;
 
@@ -23,7 +22,7 @@ pub fn enable(n: crate::stm32::Interrupt) {
     let nvic = unsafe {&*cortex_m::peripheral::NVIC::PTR};
     let bit: usize = n as usize % 32;
     let idx: usize = n as usize / 32;
-    crate::link_assert!(size_of_val(&nvic.iser[idx as usize]) == 4);
+    crate::link_assert!(size_of_val(&nvic.iser[idx]) == 4);
     unsafe {nvic.iser[idx].write(1u32 << bit)};
 }
 

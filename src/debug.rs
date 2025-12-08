@@ -2,7 +2,15 @@
 //! be used another crate directly, rather than being contained in our own
 //! crate.
 //!
-//! We assume that the crate we are part of contains a few things...
+//! We assume that the crate we are part of contains a few things.  These are
+//! needed to make the `dbg!` and `dbgln!` macros usable:
+//!
+//! * A top level const bool `ENABLE_DEBUG` should be defined to provide a
+//!   per-crate mechanism to compile with or without debug.
+//! * A function `debug_fmt(core::fmt::Arguments)`, providing a hook to
+//!   dispatch to the correct debug object.
+
+#![allow(clippy::crate_in_macro_def)]
 
 use crate::utils::{WFE, barrier};
 use crate::vcell::{UCell, VCell};

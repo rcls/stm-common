@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use core::slice::from_raw_parts;
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct DeviceDesc {
     pub length            : u8,
     pub descriptor_type   : u8,
@@ -20,7 +20,7 @@ pub struct DeviceDesc {
 }
 const _: () = const {assert!(size_of::<DeviceDesc>() == 18)};
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct ConfigurationDesc {
     pub length             : u8,
     pub descriptor_type    : u8,
@@ -33,7 +33,7 @@ pub struct ConfigurationDesc {
 }
 const _: () = const {assert!(size_of::<ConfigurationDesc>() == 9)};
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct InterfaceAssociation {
     pub length            : u8,
     pub descriptor_type   : u8,
@@ -46,7 +46,7 @@ pub struct InterfaceAssociation {
 }
 const _: () = const {assert!(size_of::<InterfaceAssociation>() == 8)};
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct InterfaceDesc {
     pub length             : u8,
     pub descriptor_type    : u8,
@@ -61,7 +61,7 @@ pub struct InterfaceDesc {
 }
 const _: () = const {assert!(size_of::<InterfaceDesc>() == 9)};
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct EndpointDesc {
     pub length          : u8,
     pub descriptor_type : u8,
@@ -96,7 +96,7 @@ impl EndpointDesc {
     }
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 #[allow(non_camel_case_types)]
 pub struct CDC_ACM_Continuation {
     pub cdc            : u16,
@@ -106,7 +106,7 @@ pub struct CDC_ACM_Continuation {
     pub cdc_union      : u8,
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct DeviceQualifier {
     pub length             : u8,
     pub descriptor_type    : u8,
@@ -194,7 +194,7 @@ impl SetupResult {
 // CDC ACM - capabilities = 0 to start.
 // CDC union - slave not master
 
-#[repr(packed)]
+#[repr(C, packed)]
 #[allow(non_camel_case_types)]
 pub struct CDC_Header {
     pub length         : u8,
@@ -203,7 +203,7 @@ pub struct CDC_Header {
     pub cdc            : u16,
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct UnionFunctionalDesc<const NUM_INTF: usize> {
     pub length           : u8,
     pub descriptor_type  : u8,
@@ -212,7 +212,7 @@ pub struct UnionFunctionalDesc<const NUM_INTF: usize> {
     pub sub_interface    : [u8; NUM_INTF],
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct CallManagementDesc {
     pub length         : u8,
     pub descriptor_type: u8,
@@ -221,7 +221,7 @@ pub struct CallManagementDesc {
     pub data_interface : u8,
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct AbstractControlDesc {
     pub length         : u8,
     pub descriptor_type: u8,
@@ -229,7 +229,7 @@ pub struct AbstractControlDesc {
     pub capabilities   : u8,
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 #[allow(non_camel_case_types)]
 pub struct DFU_FunctionalDesc {
     pub length         : u8,
